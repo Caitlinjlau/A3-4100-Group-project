@@ -1,6 +1,6 @@
 ---
 title: 'Group Project: Early Alert with LMS Data'
-author: '[[ADD YOUR NAME, CORNELL ID]]'
+author: '[Caitlin Lau, CJL236]]'
 subtitle: INFO 4100 Learning Analytics
 output:
   pdf_document: default
@@ -44,13 +44,21 @@ To look up what pages URLs refer to (works for browser events, not server events
 
 # Exploring Clickstreams
 # add code here
-
+head(cl)
+print("distinct hash id")
+n_distinct(cl$hash_id)
+n_distinct(cl$survey_id)
+n_distinct(cl$time)
+print("distinct name")
+n_distinct(cl$name)
+#length(cl$hash_id)
+#summary(cl)
 # Exploring Module States
 # add code here
-
+head(a)
 # Exploring Assessment grades
 # add code here
-
+head(m)
 ###############################################
 ###############################################
 ```
@@ -68,6 +76,7 @@ table(ma$module_type, ma$first_attempted_timestamp>0)
 
 # We see that assignments were due (submitted) at different times
 boxplot(ma$first_attempted_timestamp ~ ma$module_id)
+
 ```
 
 # Step 2: Define a prediction task
@@ -99,7 +108,8 @@ Get the outcome for each graded assignment. Figure out the deadline for each and
 The following table helps you see the various graded assignments to consider. We keep only those where possible_graded > 0. **I define the deadline as the 90th percentile of submissions (you may use this simplification).**
 
 ```{r}
-ma %>% 
+#We assigned table to something
+unsubmit_tbl <- ma %>% 
     filter(possible_graded > 0) %>%
     group_by(module_id) %>% 
     summarise(
@@ -107,6 +117,7 @@ ma %>%
         p_unsubmitted = mean(is.na(first_attempted_timestamp))
     ) %>% 
     arrange(deadline)
+
 ```
 
 Now you know which assessments (module_ids) to target. **Be sure to kick out the one with p_unsubmitted > 0.5**; They were not due yet when the export was created.
@@ -117,8 +128,15 @@ Now you know which assessments (module_ids) to target. **Be sure to kick out the
 ############################################### 
 ####### BEGIN INPUT: Define outcome ###########
 ###############################################
+unsubmit_tbl = subset(unsubmit_tbl, p_unsubmitted < 0.5)
+new_unsubmit_tbl=merge(x = unsubmit_tbl, y = ma, by = "module_id", all.x = TRUE)
+unsubmit_tbl
+new_unsubmit_tbl
 
-# add code here
+#subtract 24 hours from the deadline variable in order to find the day before ???
+new_unsubmit_tbl$is_submitted=(ifelse(new_unsubmit_tbl$deadline-(24*60*60)<new_unsubmit_tbl$first_attempted_timestamp, 1, 0))
+new_unsubmit_tbl
+
 
 ############################################### 
 ############################################### 
@@ -153,9 +171,16 @@ head(example_features)
 ############################################### 
 ###### BEGIN INPUT: Engineer features #########
 ###############################################
+cl#merge
 
+new_unsubmit_tbl=merge(x = unsubmit_tbl, y = cl, by = "module_id", all.x = TRUE)
+
+cl_features = cl %>% 
+    group_by(hash_id,) %>%
+    summarise()
 # add code here
-
+# textbook.pdf.page.scrolled
+# event source=
 ###############################################
 ###############################################
 ```
