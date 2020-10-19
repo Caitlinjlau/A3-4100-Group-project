@@ -41,7 +41,7 @@ To look up what pages URLs refer to (works for browser events, not server events
 ############################################### 
 ###### BEGIN INPUT: Explore each dataset ###### 
 ###############################################
-
+#WE need to add more here
 # Exploring Clickstreams
 # add code here
 head(cl)
