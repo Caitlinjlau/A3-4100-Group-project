@@ -45,17 +45,25 @@ To look up what pages URLs refer to (works for browser events, not server events
 # Exploring Clickstreams
 # add code here
 head(cl)
-print("distinct hash id")
-n_distinct(cl$hash_id)
-n_distinct(cl$survey_id)
-n_distinct(cl$time)
-print("distinct name")
-n_distinct(cl$name)
-#length(cl$hash_id)
-#summary(cl)
+# print("distinct hash id")
+# n_distinct(cl$hash_id)
+# n_distinct(cl$survey_id)
+# n_distinct(cl$time)
+# print("distinct name")
+# n_distinct(cl$name)
+# summary(cl)
+# table(cl$event_source)
+
 # Exploring Module States
 # add code here
 head(a)
+# print("distinct hash_id")
+# n_distinct(a$hash_id)
+# print("distinct created timestamp")
+# n_distinct(a$created_timestamp)
+# summary(a)
+# table(a$created_timestamp)
+
 # Exploring Assessment grades
 # add code here
 head(m)
@@ -117,7 +125,11 @@ unsubmit_tbl <- ma %>%
         p_unsubmitted = mean(is.na(first_attempted_timestamp))
     ) %>% 
     arrange(deadline)
-
+unsubmit_tbl
+#the assessment table has a lot of empty records in there even if no questions associated 
+#p unsubmit looks up if most people have not submitted anything for it it is not a real assignment. And why it needs to be kicked out
+#the ma table is missing the deadlines initially. 
+#the ma table tries to figure out the deadline when ppl submit
 ```
 
 Now you know which assessments (module_ids) to target. **Be sure to kick out the one with p_unsubmitted > 0.5**; They were not due yet when the export was created.
@@ -128,13 +140,20 @@ Now you know which assessments (module_ids) to target. **Be sure to kick out the
 ############################################### 
 ####### BEGIN INPUT: Define outcome ###########
 ###############################################
+#should this be > 0.5
 unsubmit_tbl = subset(unsubmit_tbl, p_unsubmitted < 0.5)
 new_unsubmit_tbl=merge(x = unsubmit_tbl, y = ma, by = "module_id", all.x = TRUE)
 unsubmit_tbl
 new_unsubmit_tbl
 
 #subtract 24 hours from the deadline variable in order to find the day before ???
-new_unsubmit_tbl$is_submitted=(ifelse(new_unsubmit_tbl$deadline-(24*60*60)<new_unsubmit_tbl$first_attempted_timestamp, 1, 0))
+#1. need to build indicator if person has unsubmitted or submitted regardless of 24 hours use assesment table earned grade or first attempted field
+#new column: if earned_grade=0 and first attempted timestamp in ma is NA then it is unsubmitted.
+new_unsubmit_tbl$is_submitted=(ifelse(is.na(new_unsubmit_tbl$first_attempted_timestamp), 1, 0 ))
+
+# new column: the 24 hours thing is to figure out the last moment possible deadline-(24*60*60) to use features to predict if turned in or not. 
+#new_unsubmit_tbl$is_submitted=(ifelse(new_unsubmit_tbl$deadline-(24*60*60)<new_unsubmit_tbl$first_attempted_timestamp, 1, 0))
+new_unsubmit_tbl$deadline_minus_24 = (new_unsubmit_tbl$deadline-(60 * 60 * 24))
 new_unsubmit_tbl
 
 
@@ -151,6 +170,7 @@ Before you start feature engineering, you need to constrain the data for **each*
 Remember that the dataset we are aiming for has 1 row per person and assessment with several feature variables and one outcome variable. You created the outcome above. Now you need to create the appropriate features to join. I'm giving you an example for using `deadline = 1600304996` and creating 2 basic features from the clickstream. You should try to create a lot more features, including complex ones, that can use the clickstream or other datasets (but remember the timing constraint).
 
 ```{r}
+#just alwat remember to minus sec_day for example_deadline
 secs_day = 60 * 60 * 24
 example_deadline = 1600304996
 
@@ -171,13 +191,71 @@ head(example_features)
 ############################################### 
 ###### BEGIN INPUT: Engineer features #########
 ###############################################
-cl#merge
+# cl
+# a
+# new_unsubmit_tbl
+# cl group by name and filter out na for hash id. 
+#5 pages that were top 5 search by pages (max frequency)
+# top page click up until deadlien 24 mark 
+#num clicks 
+#usage_key links up with each module found in the a table.
 
-new_unsubmit_tbl=merge(x = unsubmit_tbl, y = cl, by = "module_id", all.x = TRUE)
+#get more features and then reduce them on performance 
+# feature 1: num load_video with a hash_ID 
+# feature 2: num pause_video with a hash_ID
+# feature 3: speed_change_video with hashID
+# feature 4: stop_video with hashID
+#feature 5: how many times they clicked on sllyabus (/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/2d815b2e787344838a1509c7a5861d2d/6fffcdccb3b84a8cbc79c173cbbe20e8/)
+# feature 6: did they go to progress tab?
+#/courses/course-v1:Cornellx+INFO4100+Fall2020/progress
+#feature 7: seek_video
+#feature 8: edx.grades.problem.submitted
+#feature 9: 	edx.ui.lms.link_clicked
+#feature 10: Did they click the slack tab
+  #/courses/course-v1:Cornellx+INFO4100+Fall2020/f7c1480e105a4999839847b62fd7c19e/
+#feature 11: did they do week 2 reading
+  #/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/6502c5233b274e2fa8797269fb79e890/8f630d1feb054691ac467f5c8c4bf68a/
+#feature 12: did they do week 7 reading. 
 
+#run a filter (NOT NECESSARRY)
+#filter the people who clicked on the slyabus link (works as a search function to look up values you want NOT NECESARRY)
+ cl_filter = cl %>%
+  filter(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/6502c5233b274e2fa8797269fb79e890/8f630d1feb054691ac467f5c8c4bf68a/")
+ cl_filter
+
+#merge
+#most features from cl table 
+#a table max grade earned (only take grades that had happened prior to deadline)
+#max grade earned (new_unsubmit table) make sure to check the <first submitted timestamp < deadline_minus_24
+#merge by hash ID 
+#new_unsubmit_tbl=merge(x = unsubmit_tbl, y = cl, by = "module_id", all.x = TRUE)
+
+#merge hash id and deadline and new_unsubmit_table
 cl_features = cl %>% 
     group_by(hash_id,) %>%
-    summarise()
+    summarise(
+      num_load_video = sum(name=="load_video"),
+      num_pause_video = sum(name=="pause_video"),
+      num_speed_change_video = sum(name=="speed_change_video"),
+      num_stop_video = sum(name=="stop_video"),
+      num_click_syllabus = sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/2d815b2e787344838a1509c7a5861d2d/6fffcdccb3b84a8cbc79c173cbbe20e8/"),
+      num_click_progress = sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/progress"),
+      num_seek_video = sum(name=="seek_video"),
+      num_name_prob_submit = sum(name=="edx.grades.problem.submitted"),
+      num_slack_tab= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/f7c1480e105a4999839847b62fd7c19e/"),
+      num_week_two_reading= sum( name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/6502c5233b274e2fa8797269fb79e890/8f630d1feb054691ac467f5c8c4bf68a/"),
+      num_week_five_reading=sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/9c0661a25c0c4649a4971fb1a7d94c20/47161f5dde62497d9dd8f5b532de69d2/"),
+      num_week_seven_reading= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/7692a90992fe43acbe8caea218a2a595/bb26fa8b1f7648768c9ba9076f54e786/")
+    )
+cl_features
+#new_unsubmit_tbl_features= new_unsubmit_tbl %>%
+#  group_by(hash_id,) %>%
+#  summarise()
+  
+
+
+#merge cl features and new_unsubmit_tbl_features by hash_ID 
+
 # add code here
 # textbook.pdf.page.scrolled
 # event source=
