@@ -161,7 +161,6 @@ new_unsubmit_tbl$is_submitted=(ifelse(is.na(new_unsubmit_tbl$first_attempted_tim
 new_unsubmit_tbl$deadline_minus_24 = (new_unsubmit_tbl$deadline-(60 * 60 * 24))
 new_unsubmit_tbl
 
-# From Trevor: It looks like the is_submitted column is switched using the code above.  I'm going to rewrite the new below and leave / comment out the old.
 
 ############################################### 
 ############################################### 
@@ -328,16 +327,35 @@ train = combined_ranked %>%
 ####### BEGIN INPUT: Train and report #########
 ###############################################
 
-# Fit  model to training data
+# Fit model to training data
+# Linear Regression
 m_linreg = lm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
                 num_click_syllabus + num_click_progress + num_seek_video + num_name_prob_submit +
                 num_slack_tab + num_week_two_reading + num_week_five_reading + num_week_seven_reading
               , data = train)
 
-# Get predictions
+# Logistic Regression
 
-linreg_predict = predict(m_linreg, newdata = test, type = 'response')
-unique(linreg_predict)
+m_logreg = glm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
+                num_click_syllabus + num_click_progress + num_seek_video + num_name_prob_submit +
+                num_slack_tab + num_week_two_reading + num_week_five_reading + num_week_seven_reading
+              , data = train, family = 'binomial')
+
+
+# Get predictions
+# Linear Regression
+
+p_linreg = predict(m_linreg, newdata = test)
+
+linreg_predict
+
+# Logistic Regression
+
+p_logreg = predict(m_logreg, newdata = test, type = 'response')
+p_logreg = ifelse(p_logreg > .5, 1, 0)
+
+p_logreg
+
 
 # Compute accuracy, recall, precision, and F1
 # add code here
