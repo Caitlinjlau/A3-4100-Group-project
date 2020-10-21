@@ -141,7 +141,7 @@ Now you know which assessments (module_ids) to target. **Be sure to kick out the
 ####### BEGIN INPUT: Define outcome ###########
 ###############################################
 #should this be > 0.5
-unsubmit_tbl = subset(unsubmit_tbl, p_unsubmitted < 0.5)
+unsubmit_tbl = subset(unsubmit_tbl, p_unsubmitted <= 0.5)
 new_unsubmit_tbl=merge(x = unsubmit_tbl, y = ma, by = "module_id", all.x = TRUE)
 unsubmit_tbl
 new_unsubmit_tbl
@@ -274,11 +274,37 @@ cl_features
 ###############################################
 
 # Identify last 4 periods for testing
-# add code here
+
+#list of modules ranked by deadline
+first_modules = new_unsubmit_tbl %>% 
+  group_by(module_id) %>%
+  summarise(
+    avg_deadline = mean(deadline_minus_24)
+  ) %>%
+  mutate(i = rank(avg_deadline))
+
+
+
+
+#combining features and outcome
+combined_hash = left_join(cl_features, new_unsubmit_tbl, by = 'hash_id')
+
+#combining module_id rank based on deadline
+combined_ranked = left_join(combined_hash, first_modules, by = 'module_id')
+
+
 
 # Split the dataset into train and test based on the module_ids or periods
-# test = 
-# train = 
+
+# test - first 9 modules
+test = combined_ranked %>% 
+  group_by(hash_id) %>%
+  filter(i >= 10)
+
+# train - last 4 modules
+train = combined_ranked %>% 
+  group_by(hash_id) %>%
+  filter(i < 10)
 
 ###############################################
 ###############################################
@@ -294,10 +320,15 @@ cl_features
 ###############################################
 
 # Fit  model to training data
-# add code here
+m_linreg = lm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
+                num_click_syllabus + num_click_progress + num_seek_video + num_name_prob_submit +
+                num_slack_tab + num_week_two_reading + num_week_five_reading + num_week_seven_reading
+              , data = train)
 
 # Get predictions
-# add code here
+
+linreg_predict = unique(predict(m_linreg, newdata = test, type = 'response'))
+linreg_predict
 
 # Compute accuracy, recall, precision, and F1
 # add code here
