@@ -54,7 +54,7 @@ head(cl)
 # summary(cl)
 # table(cl$event_source)
 
-# Exploring Module States
+# Exploring Assessment grades
 # add code here
 head(a)
 # print("distinct hash_id")
@@ -64,7 +64,7 @@ head(a)
 # summary(a)
 # table(a$created_timestamp)
 
-# Exploring Assessment grades
+# Exploring Module States
 # add code here
 head(m)
 ###############################################
@@ -274,9 +274,13 @@ cl_features
 
 # Identify last 4 periods for testing
 # add code here
-
+#Assuming higher timestamp means later time - Destiny
+x <- sort(unique(new_unsubmit_tbl$deadline_minus_24), decreasing = TRUE)
+y <- subset(new_unsubmit_tbl, new_unsubmit_tbl$deadline_minus_24 %in% x[1:4])
+mod_ids_of_last_four <- unique(y$module_id)
+mod_ids_of_last_four
 # Split the dataset into train and test based on the module_ids or periods
-# test = 
+#test = 
 # train = 
 
 ###############################################
