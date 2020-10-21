@@ -213,9 +213,10 @@ head(example_features)
 #feature 9: 	edx.ui.lms.link_clicked
 #feature 10: Did they click the slack tab
   #/courses/course-v1:Cornellx+INFO4100+Fall2020/f7c1480e105a4999839847b62fd7c19e/
-#feature 11: did they do week 2 reading
+#feature 11: num clicked on the week 2 reading
   #/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/6502c5233b274e2fa8797269fb79e890/8f630d1feb054691ac467f5c8c4bf68a/
-#feature 12: did they do week 7 reading. 
+#feature 12: num clicked on the week 5 reading
+#feature 12: num clicked on the week 7 reading
 
 #run a filter (NOT NECESSARRY)
 #filter the people who clicked on the slyabus link (works as a search function to look up values you want NOT NECESARRY)
