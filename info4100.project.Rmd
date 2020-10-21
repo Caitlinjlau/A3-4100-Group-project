@@ -284,8 +284,6 @@ first_modules = new_unsubmit_tbl %>%
   mutate(i = rank(avg_deadline))
 
 
-
-
 #combining features and outcome
 combined_hash = left_join(cl_features, new_unsubmit_tbl, by = 'hash_id')
 
@@ -293,17 +291,16 @@ combined_hash = left_join(cl_features, new_unsubmit_tbl, by = 'hash_id')
 combined_ranked = left_join(combined_hash, first_modules, by = 'module_id')
 
 
-
 # Split the dataset into train and test based on the module_ids or periods
 
-# test - first 9 modules
+# test - last 4 modules
 test = combined_ranked %>%
   filter(i >= 10) %>%
   subset(select = c(num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
                 num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading, is_submitted))
 
-# train - last 4 modules
+# train - first 9 modules
 train = combined_ranked %>% 
   filter(i < 10) %>%
   subset(select = c(num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
