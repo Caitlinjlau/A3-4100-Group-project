@@ -234,9 +234,12 @@ head(example_features)
 #max grade earned (new_unsubmit table) make sure to check the <first submitted timestamp < deadline_minus_24
 #merge by hash ID 
 #new_unsubmit_tbl=merge(x = unsubmit_tbl, y = cl, by = "module_id", all.x = TRUE)
+ 
+ cl
 
 #merge hash id and deadline and new_unsubmit_table
 cl_features = cl %>% 
+  filter(timestamp < example_deadline - secs_day and !is.na(hash_id ) %>%
     group_by(hash_id,) %>%
     summarise(
       num_load_video = sum(name=="load_video"),
@@ -252,27 +255,27 @@ cl_features = cl %>%
       num_week_five_reading=sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/9c0661a25c0c4649a4971fb1a7d94c20/47161f5dde62497d9dd8f5b532de69d2/"),
       num_week_seven_reading= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/7692a90992fe43acbe8caea218a2a595/bb26fa8b1f7648768c9ba9076f54e786/")
     )
-#cl_features
-
-a_features = a %>%
-  group_by(hash_id) %>%
-  filter(!is.na(first_attempted_timestamp)) %>%
-  summarise(
-    avg_grade = sum(earned_graded) / sum(possible_graded)
-  )
-
-a_features
-
-new_unsubmit_tbl_features= new_unsubmit_tbl %>%
- group_by(hash_id,) %>%
- summarise(
-   how_early_submit_before_deadline = deadline-first_attempted_timestamp, 
-   
-   
- )
-
-cl_features = left_join(cl_features, a_features, by = 'hash_id')
 cl_features
+
+# a_features = a %>%
+#   group_by(hash_id) %>%
+#   filter(!is.na(first_attempted_timestamp)) %>%
+#   summarise(
+#     avg_grade = sum(earned_graded) / sum(possible_graded)
+#   )
+# 
+# a_features
+# 
+# new_unsubmit_tbl_features= new_unsubmit_tbl %>%
+#  group_by(hash_id,) %>%
+#  summarise(
+#    how_early_submit_before_deadline = deadline-first_attempted_timestamp, 
+#    
+#    
+ # )
+
+# cl_features = left_join(cl_features, a_features, by = 'hash_id')
+# cl_features
 #new_unsubmit_tbl_features
 
 
@@ -322,32 +325,32 @@ test = combined_ranked %>%
   group_by(hash_id) %>%
   subset(select = c(hash_id, num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading, avg_grade, is_submitted))
+                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading, is_submitted))
+summary(as.factor(test$is_submitted))
 
-
+#added group_by
 # train - first 9 modules
 train = combined_ranked %>% 
   filter(i < 10) %>%
+  #group_by(hash_id) %>%
   subset(select = c(hash_id, num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading, avg_grade, is_submitted))
+                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading,  is_submitted))
+summary(as.factor(train$is_submitted))
 
 #test the correlation 
 correlation_testing = combined_ranked %>% 
   subset(select = c( num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading, avg_grade, is_submitted))
+                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading,  is_submitted))
 
 
 outcome_vars = c("is_submitted")
 cor(correlation_testing)[,outcome_vars]
 #is.na(correlation_testing)
-plot(combined_ranked$avg_grade, combined_ranked$is_submitted) 
-length(!is.na(combined_ranked$avg_grade))
-table(combined_ranked$avg_grade)
+
 length(combined_ranked$is_submitted)
 
-cor(combined_ranked$avg_grade, combined_ranked$is_submitted)
 ###############################################
 ###############################################
 ```
@@ -364,20 +367,20 @@ cor(combined_ranked$avg_grade, combined_ranked$is_submitted)
 # Fit model to training data
 # Linear Regression
 #took out num_seek_video
-m_linreg = lm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
-                num_click_syllabus + num_click_progress + num_name_prob_submit +
-                num_slack_tab + num_week_two_reading + num_week_five_reading + num_week_seven_reading
-              , data = train)
-m_linreg
+# m_linreg = lm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
+#                 num_click_syllabus + num_click_progress + num_name_prob_submit +
+#                 num_slack_tab + num_week_two_reading + num_week_five_reading + num_week_seven_reading
+#               , data = train)
+# m_linreg
 # Logistic Regression
 #m_logreg = glm(quiz300 ~ .-num_quiz-studentID , data = train, family = "binomial")
 #took out num_seek_video, num_click sylabus, num_week two reading 
-m_logreg = glm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video 
-               + num_click_progress  + num_name_prob_submit +
-                num_slack_tab  + num_week_five_reading + num_week_seven_reading
+# m_logreg = glm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video 
+#                + num_click_progress  + num_name_prob_submit 
+#               , data = train, family = 'binomial')
+m_logreg = glm(is_submitted ~  num_name_prob_submit 
               , data = train, family = 'binomial')
-
-
+summary(m_logreg)
 #naive Bayes 
 library(e1071)
 m_nb = naiveBayes(as.factor(is_submitted) ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
@@ -387,13 +390,13 @@ m_nb = naiveBayes(as.factor(is_submitted) ~ num_load_video + num_pause_video + n
 print("this is the naive Bayes")
 m_nb
 p_nb = predict(m_nb, newdata = test, type = "class")
-
+test
 # Get predictions
 # Linear Regression
 
-p_linreg = predict(m_linreg, newdata = test)
-
-p_linreg
+# p_linreg = predict(m_linreg, newdata = test)
+# 
+# p_linreg
 
 # Logistic Regression
 
@@ -410,17 +413,16 @@ p_logreg
 # Precision: TruePos / (TruePos + FalsePos)
 # F1 = 2 / (1/recall + 1/precision)
 
-cm_linreg = table(true = test$is_submitted, predicted = p_linreg)
 cm_logreg = table(true = test$is_submitted, predicted = p_logreg)
-cm_nb = table(true = test$is_submitted, predicted = p_nb)
+#cm_nb = table(true = test$is_submitted, predicted = p_nb)
 
 # convenience function for evaluation of confusion matrix
 cm_eval = function(cm) {
     list(
-        accur = sum(diag(cm)) / sum(cm),
-        recall = cm[2,2] / sum(cm[2,]),
-        precision = cm[2,2] / sum(cm[,2]),
-        F1 =  2 / (1/recall + 1/precision)
+        # accuracy = sum(diag(cm)) / sum(cm),
+        # recall = cm[2,2] / sum(cm[2,]),
+        # precision = cm[2,2] / sum(cm[,2]),
+        F1 = 2 / (1/(cm[2,2] / sum(cm[2,])) + 1/(cm[2,2] / sum(cm[,2])))
     )
 }
 
