@@ -347,7 +347,7 @@ m_logreg = glm(is_submitted ~ num_load_video + num_pause_video + num_speed_chang
 
 p_linreg = predict(m_linreg, newdata = test)
 
-linreg_predict
+p_linreg
 
 # Logistic Regression
 
