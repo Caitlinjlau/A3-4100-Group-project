@@ -158,7 +158,7 @@ new_unsubmit_tbl$is_submitted=(ifelse(is.na(new_unsubmit_tbl$first_attempted_tim
 # new column: the 24 hours thing is to figure out the last moment possible deadline-(24*60*60) to use features to predict if turned in or not. 
 #new_unsubmit_tbl$is_submitted=(ifelse(new_unsubmit_tbl$deadline-(24*60*60)<new_unsubmit_tbl$first_attempted_timestamp, 1, 0))
 new_unsubmit_tbl$deadline_minus_24 = (new_unsubmit_tbl$deadline-(60 * 60 * 24))
-new_unsubmit_tbl
+unique(new_unsubmit_tbl$deadline)
 
 
 ############################################### 
@@ -238,24 +238,39 @@ head(example_features)
  cl
 
 #merge hash id and deadline and new_unsubmit_table
-cl_features = cl %>% 
-  filter(timestamp < example_deadline - secs_day and !is.na(hash_id ) %>%
-    group_by(hash_id,) %>%
-    summarise(
-      num_load_video = sum(name=="load_video"),
-      num_pause_video = sum(name=="pause_video"),
-      num_speed_change_video = sum(name=="speed_change_video"),
-      num_stop_video = sum(name=="stop_video"),
-      num_click_syllabus = sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/2d815b2e787344838a1509c7a5861d2d/6fffcdccb3b84a8cbc79c173cbbe20e8/"),
-      num_click_progress = sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/progress"),
-      num_seek_video = sum(name=="seek_video"),
-      num_name_prob_submit = sum(name=="edx.grades.problem.submitted"),
-      num_slack_tab= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/f7c1480e105a4999839847b62fd7c19e/"),
-      num_week_two_reading= sum( name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/6502c5233b274e2fa8797269fb79e890/8f630d1feb054691ac467f5c8c4bf68a/"),
-      num_week_five_reading=sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/9c0661a25c0c4649a4971fb1a7d94c20/47161f5dde62497d9dd8f5b532de69d2/"),
-      num_week_seven_reading= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/7692a90992fe43acbe8caea218a2a595/bb26fa8b1f7648768c9ba9076f54e786/")
-    )
-cl_features
+ 
+# for specific deadliens, if the time for the clickstream data aligns, then generate a feature for it
+ 
+ 
+ #1602114378 1601512680 1600994994 1600304996 1602117122 1601666346 1601512170 1599677566 1600305615 1600395167 1599694849 1599338162 1602288653
+ deadlines_used = new_unsubmit_tbl$deadline
+ 
+for (i in range(len(deadlines_used))){
+  # if the value > 0, then subtract the deadlines 
+   
+      start = deadlines[i-1]
+      end = deadlines[i] 
+      cl_features = cl %>% 
+      ifelse(i > 0,(filter(timestamp > start & timestamp <= end & !is.na(hash_id)), (filter(timestamp <= end)%>%)) %>%)
+        
+          group_by(hash_id,) %>%
+          summarise(
+            num_load_video = sum(name=="load_video"),
+            num_pause_video = sum(name=="pause_video"),
+            num_speed_change_video = sum(name=="speed_change_video"),
+            num_stop_video = sum(name=="stop_video"),
+            num_click_syllabus = sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/2d815b2e787344838a1509c7a5861d2d/6fffcdccb3b84a8cbc79c173cbbe20e8/"),
+            num_click_progress = sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/progress"),
+            num_seek_video = sum(name=="seek_video"),
+            num_name_prob_submit = sum(name=="edx.grades.problem.submitted"),
+            num_slack_tab= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/f7c1480e105a4999839847b62fd7c19e/"),
+            num_week_two_reading= sum( name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/6502c5233b274e2fa8797269fb79e890/8f630d1feb054691ac467f5c8c4bf68a/"),
+            num_week_five_reading=sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/9c0661a25c0c4649a4971fb1a7d94c20/47161f5dde62497d9dd8f5b532de69d2/"),
+            num_week_seven_reading= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/7692a90992fe43acbe8caea218a2a595/bb26fa8b1f7648768c9ba9076f54e786/")
+          )
+      cl_features
+}
+   
 
 # a_features = a %>%
 #   group_by(hash_id) %>%
