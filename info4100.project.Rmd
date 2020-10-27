@@ -141,7 +141,7 @@ Now you know which assessments (module_ids) to target. **Be sure to kick out the
 ####### BEGIN INPUT: Define outcome ###########
 ###############################################
 #should this be > 0.5
-unsubmit_tbl = subset(unsubmit_tbl, p_unsubmitted < 0.5)
+unsubmit_tbl = subset(unsubmit_tbl, p_unsubmitted <= 0.5)
 new_unsubmit_tbl=merge(x = unsubmit_tbl, y = ma, by = "module_id", all.x = TRUE)
 unsubmit_tbl
 new_unsubmit_tbl
@@ -149,7 +149,12 @@ new_unsubmit_tbl
 #subtract 24 hours from the deadline variable in order to find the day before ???
 #1. need to build indicator if person has unsubmitted or submitted regardless of 24 hours use assesment table earned grade or first attempted field
 #new column: if earned_grade=0 and first attempted timestamp in ma is NA then it is unsubmitted.
-new_unsubmit_tbl$is_submitted=(ifelse(is.na(new_unsubmit_tbl$first_attempted_timestamp), 1, 0 ))
+#new_unsubmit_tbl$is_submitted=(ifelse(is.na(new_unsubmit_tbl$first_attempted_timestamp), 1, 0 ))
+
+
+# From Trevor: It looks like the is_submitted column is switched using the code above.  I'm going to rewrite the new below and leave / comment out the old.
+new_unsubmit_tbl$is_submitted=(ifelse(is.na(new_unsubmit_tbl$first_attempted_timestamp), 0, 1 ))
+
 
 # new column: the 24 hours thing is to figure out the last moment possible deadline-(24*60*60) to use features to predict if turned in or not. 
 #new_unsubmit_tbl$is_submitted=(ifelse(new_unsubmit_tbl$deadline-(24*60*60)<new_unsubmit_tbl$first_attempted_timestamp, 1, 0))
@@ -274,15 +279,40 @@ cl_features
 ###############################################
 
 # Identify last 4 periods for testing
-# add code here
-#Assuming higher timestamp means later time - Destiny
-x <- sort(unique(new_unsubmit_tbl$deadline_minus_24), decreasing = TRUE)
-y <- subset(new_unsubmit_tbl, new_unsubmit_tbl$deadline_minus_24 %in% x[1:4])
-mod_ids_of_last_four <- unique(y$module_id)
-mod_ids_of_last_four
+
+#list of modules ranked by deadline
+first_modules = new_unsubmit_tbl %>% 
+  group_by(module_id) %>%
+  summarise(
+    avg_deadline = mean(deadline_minus_24)
+  ) %>%
+  mutate(i = rank(avg_deadline))
+
+
+#combining features and outcome
+combined_hash = left_join(cl_features, new_unsubmit_tbl, by = 'hash_id')
+
+#combining module_id rank based on deadline
+combined_ranked = left_join(combined_hash, first_modules, by = 'module_id')
+
+
 # Split the dataset into train and test based on the module_ids or periods
-#test = 
-# train = 
+
+# test - last 4 modules
+test = combined_ranked %>%
+  filter(i >= 10) %>%
+  group_by(hash_id) %>%
+  subset(select = c(hash_id, num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
+                num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
+                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading, is_submitted))
+
+
+# train - first 9 modules
+train = combined_ranked %>% 
+  filter(i < 10) %>%
+  subset(select = c(hash_id, num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
+                num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
+                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading, is_submitted))
 
 ###############################################
 ###############################################
@@ -297,11 +327,35 @@ mod_ids_of_last_four
 ####### BEGIN INPUT: Train and report #########
 ###############################################
 
-# Fit  model to training data
-# add code here
+# Fit model to training data
+# Linear Regression
+m_linreg = lm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
+                num_click_syllabus + num_click_progress + num_seek_video + num_name_prob_submit +
+                num_slack_tab + num_week_two_reading + num_week_five_reading + num_week_seven_reading
+              , data = train)
+
+# Logistic Regression
+
+m_logreg = glm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
+                num_click_syllabus + num_click_progress + num_seek_video + num_name_prob_submit +
+                num_slack_tab + num_week_two_reading + num_week_five_reading + num_week_seven_reading
+              , data = train, family = 'binomial')
+
 
 # Get predictions
-# add code here
+# Linear Regression
+
+p_linreg = predict(m_linreg, newdata = test)
+
+linreg_predict
+
+# Logistic Regression
+
+p_logreg = predict(m_logreg, newdata = test, type = 'response')
+p_logreg = ifelse(p_logreg > .5, 1, 0)
+
+p_logreg
+
 
 # Compute accuracy, recall, precision, and F1
 # add code here
