@@ -78,7 +78,6 @@ ma = m %>% left_join(
     a %>% select(hash_id:possible_graded, first_attempted_timestamp), 
     by = c("hash_id"="hash_id", "module_id"="usage_key")
 )
-ma
 
 # Only sequential modules have a grade associated with them
 table(ma$module_type, ma$first_attempted_timestamp>0)
@@ -126,9 +125,7 @@ unsubmit_tbl <- ma %>%
         p_unsubmitted = mean(is.na(first_attempted_timestamp))
     ) %>% 
     arrange(deadline)
-
 unsubmit_tbl
-
 #the assessment table has a lot of empty records in there even if no questions associated 
 #p unsubmit looks up if most people have not submitted anything for it it is not a real assignment. And why it needs to be kicked out
 #the ma table is missing the deadlines initially. 
@@ -145,14 +142,24 @@ Now you know which assessments (module_ids) to target. **Be sure to kick out the
 ###############################################
 #should this be > 0.5
 unsubmit_tbl = subset(unsubmit_tbl, p_unsubmitted <= 0.5)
-unsubmit_tbl$deadline_minus_24 = (unsubmit_tbl$deadline-(60 * 60 * 24))
-unsubmit_tbl
-
 new_unsubmit_tbl=merge(x = unsubmit_tbl, y = ma, by = "module_id", all.x = TRUE)
+unsubmit_tbl
+new_unsubmit_tbl
 
+#subtract 24 hours from the deadline variable in order to find the day before ???
+#1. need to build indicator if person has unsubmitted or submitted regardless of 24 hours use assesment table earned grade or first attempted field
 #new column: if earned_grade=0 and first attempted timestamp in ma is NA then it is unsubmitted.
 new_unsubmit_tbl$is_submitted=(ifelse(is.na(new_unsubmit_tbl$first_attempted_timestamp), 1, 0 ))
-new_unsubmit_tbl
+
+
+
+
+
+# new column: the 24 hours thing is to figure out the last moment possible deadline-(24*60*60) to use features to predict if turned in or not. 
+#new_unsubmit_tbl$is_submitted=(ifelse(new_unsubmit_tbl$deadline-(24*60*60)<new_unsubmit_tbl$first_attempted_timestamp, 1, 0))
+new_unsubmit_tbl$deadline_minus_24 = (new_unsubmit_tbl$deadline-(60 * 60 * 24))
+unique(new_unsubmit_tbl$deadline)
+
 
 ############################################### 
 ############################################### 
@@ -185,45 +192,68 @@ head(example_features)
 *Question 3:* Engineer features for each student and assessment, subject to the timing constraint.
 
 ```{r}
-cl = cl[!is.na(cl$hash_id), ]
-
-mod_and_deadline = unsubmit_tbl[,c("module_id", "deadline_minus_24")] 
-mod_and_deadline = mod_and_deadline[order(mod_and_deadline$deadline_minus_24, decreasing = FALSE),]
-mod_and_deadline
-#FIX make it so that it is not hard coded
-#Add minimum module that clickstream information can be used in
-cl$module_id <- ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[1], mod_and_deadline$module_id[1],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[2], mod_and_deadline$module_id[2],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[3], mod_and_deadline$module_id[3],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[4], mod_and_deadline$module_id[4],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[5], mod_and_deadline$module_id[5],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[6], mod_and_deadline$module_id[6],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[7], mod_and_deadline$module_id[7],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[8], mod_and_deadline$module_id[8],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[9], mod_and_deadline$module_id[9],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[10], mod_and_deadline$module_id[10],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[11], mod_and_deadline$module_id[11],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[12], mod_and_deadline$module_id[12],
-        ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[13], mod_and_deadline$module_id[13],
-                        NA  )))))))))))))
-#cl_mod_combined = left_join(cl, unsubmit_tbl, by = "module_id")
-cl_mod_combined = merge(x = cl, y = unsubmit_tbl, by = "module_id", all.x = TRUE)
-cl_mod_combined = cl_mod_combined[!is.na(cl_mod_combined$module_id), ]
-cl
-cl_mod_combined
-tail(cl)
-#unsubmit_tbl
-tail(cl_mod_combined)
-
-
-```
-
-
-```{r}
 ############################################### 
 ###### BEGIN INPUT: Engineer features #########
 ###############################################
 
+# cleaned cl by removing any missing hash_id and keeping only sequential modules
+cl_clnd = cl %>%
+  filter(str_detect(page, 'sequential'),
+         !is.na(cl$hash_id))
+
+# cleaned ma by removing any missing hash_id
+ma_clnd = ma %>%
+  filter(!is.na(hash_id))
+
+# create a list of unique deadlines in order
+deadline_list = sort(unique(new_unsubmit_tbl$deadline))
+
+# create a list os modules in order
+module_list = as.character(unsubmit_tbl$module_id)
+
+# using timestamps to attach correct module_id to cl_cleaned
+# this is valid assuming we can only work on a module if it's the appropriate week
+
+for (r in 1:nrow(cl_clnd)){
+ if (cl_clnd[r,10] <= deadline_list[1]){
+   cl_clnd[r,11] = module_list[1]
+ } else if (cl_clnd[r,10] > deadline_list[1] & cl_clnd[r,10] <= deadline_list[2]){
+   cl_clnd[r,11] =module_list[2]
+ } else if (cl_clnd[r,10] > deadline_list[2] & cl_clnd[r,10] <= deadline_list[3]){
+   cl_clnd[r,11] = module_list[3]
+ } else if (cl_clnd[r,10] > deadline_list[3] & cl_clnd[r,10] <= deadline_list[4]){
+   cl_clnd[r,11] = module_list[4]
+ } else if (cl_clnd[r,10] > deadline_list[4] & cl_clnd[r,10] <= deadline_list[5]){
+   cl_clnd[r,11] = module_list[5]
+ } else if (cl_clnd[r,10] > deadline_list[5] & cl_clnd[r,10] <= deadline_list[6]){
+   cl_clnd[r,11] = module_list[6]
+ } else if (cl_clnd[r,10] > deadline_list[6] & cl_clnd[r,10] <= deadline_list[7]){
+   cl_clnd[r,11] = module_list[7]
+ } else if (cl_clnd[r,10] > deadline_list[7] & cl_clnd[r,10] <= deadline_list[8]){
+   cl_clnd[r,11] = module_list[8]
+ } else if (cl_clnd[r,10] > deadline_list[8] & cl_clnd[r,10] <= deadline_list[9]){
+   cl_clnd[r,11] = module_list[9]
+ } else if (cl_clnd[r,10] > deadline_list[9] & cl_clnd[r,10] <= deadline_list[10]){
+   cl_clnd[r,11] = module_list[10]
+ } else if (cl_clnd[r,10] > deadline_list[10] & cl_clnd[r,10] <= deadline_list[11]){
+   cl_clnd[r,11] = module_list[11]
+ } else if (cl_clnd[r,10] > deadline_list[11] & cl_clnd[r,10] <= deadline_list[12]){
+   cl_clnd[r,11] = module_list[12]
+ } else {
+   cl_clnd[r,11] = module_list[13]
+ }
+}
+  
+
+
+# cl
+ a
+# new_unsubmit_tbl
+# cl group by name and filter out na for hash id. 
+#5 pages that were top 5 search by pages (max frequency)
+# top page click up until deadlien 24 mark 
+#num clicks 
+#usage_key links up with each module found in the a table.
 
 #get more features and then reduce them on performance 
 # feature 1: num load_video with a hash_ID 
@@ -243,45 +273,88 @@ tail(cl_mod_combined)
 #feature 12: num clicked on the week 5 reading
 #feature 12: num clicked on the week 7 reading
 
-cl_mod_combined_features = cl_mod_combined %>% 
-    group_by(hash_id, module_id,deadline_minus_24) %>%
-    summarise(
-      num_load_video = sum(name=="load_video"),
-      num_pause_video = sum(name=="pause_video"),
-      num_speed_change_video = sum(name=="speed_change_video"),
-      num_stop_video = sum(name=="stop_video"),
-      num_click_syllabus = sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/2d815b2e787344838a1509c7a5861d2d/6fffcdccb3b84a8cbc79c173cbbe20e8/"),
-      num_click_progress = sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/progress"),
-      num_seek_video = sum(name=="seek_video"),
-      num_name_prob_submit = sum(name=="edx.grades.problem.submitted"),
-      num_slack_tab= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/f7c1480e105a4999839847b62fd7c19e/"),
-      num_week_two_reading= sum( name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/6502c5233b274e2fa8797269fb79e890/8f630d1feb054691ac467f5c8c4bf68a/"),
-      num_week_five_reading=sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/9c0661a25c0c4649a4971fb1a7d94c20/47161f5dde62497d9dd8f5b532de69d2/"),
-      num_week_seven_reading= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/7692a90992fe43acbe8caea218a2a595/bb26fa8b1f7648768c9ba9076f54e786/")
- )
+#run a filter (NOT NECESSARRY)
+#filter the people who clicked on the slyabus link (works as a search function to look up values you want NOT NECESARRY)
+ cl_filter = cl %>%
+  filter(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/6502c5233b274e2fa8797269fb79e890/8f630d1feb054691ac467f5c8c4bf68a/")
+ cl_filter
 
-cl_mod_combined_features
-cl_mod_combined_features = cl_mod_combined_features[order(cl_mod_combined_features$deadline_minus_24, decreasing = FALSE),]
-cl_mod_combined_features = cl_mod_combined_features[order(cl_mod_combined_features$hash_id, decreasing = FALSE),]
-cl_mod_combined_features
+#merge
+#most features from cl table 
+#a table max grade earned (only take grades that had happened prior to deadline)
+#max grade earned (new_unsubmit table) make sure to check the <first submitted timestamp < deadline_minus_24
+#merge by hash ID 
+#new_unsubmit_tbl=merge(x = unsubmit_tbl, y = cl, by = "module_id", all.x = TRUE)
+ 
+ cl
 
-#Aggregate data so that you have only use ceratain data for certain modules (time)
-for(i in 2:nrow(cl_mod_combined_features)) {
-  if(cl_mod_combined_features$hash_id[i-1] == cl_mod_combined_features$hash_id[i] && cl_mod_combined_features$deadline_minus_24[i-1] < cl_mod_combined_features$deadline_minus_24[i]){
-    cl_mod_combined_features$num_load_video[i] = cl_mod_combined_features$num_load_video[i] + cl_mod_combined_features$num_load_video[i-1]
-    cl_mod_combined_features$num_pause_video[i] = cl_mod_combined_features$num_pause_video[i] + cl_mod_combined_features$num_pause_video[i-1]
-    cl_mod_combined_features$num_speed_change_video[i] = cl_mod_combined_features$num_speed_change_video[i] + cl_mod_combined_features$num_speed_change_video[i-1]
-    cl_mod_combined_features$num_stop_video[i] = cl_mod_combined_features$num_stop_video[i] + cl_mod_combined_features$num_stop_video[i-1]
-    cl_mod_combined_features$num_click_syllabus[i] = cl_mod_combined_features$num_click_syllabus[i] + cl_mod_combined_features$num_click_syllabus[i-1]
-    cl_mod_combined_features$num_click_progress[i] = cl_mod_combined_features$num_click_progress[i] + cl_mod_combined_features$num_click_progress[i-1]
-    cl_mod_combined_features$num_seek_video[i] = cl_mod_combined_features$num_seek_video[i] + cl_mod_combined_features$num_seek_video[i-1]
-    cl_mod_combined_features$num_name_prob_submit[i] = cl_mod_combined_features$num_name_prob_submit[i] + cl_mod_combined_features$num_name_prob_submit[i-1]
-    cl_mod_combined_features$num_slack_tab[i] = cl_mod_combined_features$num_slack_tab[i] + cl_mod_combined_features$num_slack_tab[i-1]
-  }
+#merge hash id and deadline and new_unsubmit_table
+ 
+# for specific deadliens, if the time for the clickstream data aligns, then generate a feature for it
+ 
+ 
+ #1602114378 1601512680 1600994994 1600304996 1602117122 1601666346 1601512170 1599677566 1600305615 1600395167 1599694849 1599338162 1602288653
+deadlines_used = new_unsubmit_tbl$deadline
+ 
+for (i in range(len(deadlines_used))){
+  # if the value > 0, then subtract the deadlines 
+   
+      start = deadlines[i-1]
+      end = deadlines[i] 
+      cl_features = cl %>% 
+      ifelse(i > 0,(filter(timestamp > start & timestamp <= end & !is.na(hash_id)), (filter(timestamp <= end)%>%)) %>%)
+        
+          group_by(hash_id,) %>%
+          summarise(
+            num_load_video = sum(name=="load_video"),
+            num_pause_video = sum(name=="pause_video"),
+            num_speed_change_video = sum(name=="speed_change_video"),
+            num_stop_video = sum(name=="stop_video"),
+            num_click_syllabus = sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/2d815b2e787344838a1509c7a5861d2d/6fffcdccb3b84a8cbc79c173cbbe20e8/"),
+            num_click_progress = sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/progress"),
+            num_seek_video = sum(name=="seek_video"),
+            num_name_prob_submit = sum(name=="edx.grades.problem.submitted"),
+            num_slack_tab= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/f7c1480e105a4999839847b62fd7c19e/"),
+            num_week_two_reading= sum( name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/6502c5233b274e2fa8797269fb79e890/8f630d1feb054691ac467f5c8c4bf68a/"),
+            num_week_five_reading=sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/9c0661a25c0c4649a4971fb1a7d94c20/47161f5dde62497d9dd8f5b532de69d2/"),
+            num_week_seven_reading= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/7692a90992fe43acbe8caea218a2a595/bb26fa8b1f7648768c9ba9076f54e786/")
+          )
+      cl_features
 }
-cl_features = cl_mod_combined_features
 
 
+
+
+
+
+# a_features = a %>%
+#   group_by(hash_id) %>%
+#   filter(!is.na(first_attempted_timestamp)) %>%
+#   summarise(
+#     avg_grade = sum(earned_graded) / sum(possible_graded)
+#   )
+# 
+# a_features
+# 
+# new_unsubmit_tbl_features= new_unsubmit_tbl %>%
+#  group_by(hash_id,) %>%
+#  summarise(
+#    how_early_submit_before_deadline = deadline-first_attempted_timestamp, 
+#    
+#    
+ # )
+
+# cl_features = left_join(cl_features, a_features, by = 'hash_id')
+# cl_features
+#new_unsubmit_tbl_features
+
+
+
+#merge cl features and new_unsubmit_tbl_features by hash_ID 
+
+# add code here
+# textbook.pdf.page.scrolled
+# event source=
 ###############################################
 ###############################################
 ```
@@ -294,57 +367,59 @@ cl_features = cl_mod_combined_features
 ############################################### 
 ######## BEGIN INPUT: Split dataset ###########
 ###############################################
+
+
 # Identify last 4 periods for testing
 
 #list of modules ranked by deadline
-first_modules = unsubmit_tbl %>% 
+first_modules = new_unsubmit_tbl %>% 
   group_by(module_id) %>%
   summarise(
     avg_deadline = mean(deadline_minus_24)
   ) %>%
   mutate(i = rank(avg_deadline))
 
+
 #combining features and outcome
-combined = merge(cl_mod_combined_features, new_unsubmit_tbl, by.cl_mod_combined_features=c("hash_id", "module_id"), by.new_unsubmit_tbl=c("hash_id", "module_id"))
+combined_hash = left_join(cl_features, new_unsubmit_tbl, by = 'hash_id')
 
 #combining module_id rank based on deadline
-combined = left_join(combined, first_modules, by = 'module_id')
+combined_ranked = left_join(combined_hash, first_modules, by = 'module_id')
+combined_ranked
 
 # Split the dataset into train and test based on the module_ids or periods
+
 # test - last 4 modules
-test = combined %>%
+test = combined_ranked %>%
   filter(i >= 10) %>%
   group_by(hash_id) %>%
   subset(select = c(hash_id, num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab, is_submitted))
+                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading, is_submitted))
+summary(as.factor(test$is_submitted))
 
-
+#added group_by
 # train - first 9 modules
-train = combined %>% 
+train = combined_ranked %>% 
   filter(i < 10) %>%
+  #group_by(hash_id) %>%
   subset(select = c(hash_id, num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab,  is_submitted))
-
+                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading,  is_submitted))
+summary(as.factor(train$is_submitted))
 
 #test the correlation 
-correlation_testing = combined %>% 
+correlation_testing = combined_ranked %>% 
   subset(select = c( num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab, is_submitted))
+                num_slack_tab, num_week_two_reading, num_week_five_reading, num_week_seven_reading,  is_submitted))
 
 
-cor(correlation_testing)[,"is_submitted"]
+outcome_vars = c("is_submitted")
+cor(correlation_testing)[,outcome_vars]
+#is.na(correlation_testing)
 
-# plot(combined$num_load_video, combined$is_submitted)
-# plot(combined$num_pause_video, combined$is_submitted)
-# plot(combined$num_speed_change_video, combined$is_submitted)
-# plot(combined$num_click_syllabus, combined$is_submitted)
-# plot(combined$num_click_progress, combined$is_submitted)
-# plot(combined$num_seek_video, combined$is_submitted)
-# plot(combined$num_name_prob_submit, combined$is_submitted)
-# plot(combined$num_slack_tab, combined$is_submitted)
+length(combined_ranked$is_submitted)
 
 ###############################################
 ###############################################
@@ -358,12 +433,72 @@ cor(correlation_testing)[,"is_submitted"]
 ############################################### 
 ####### BEGIN INPUT: Train and report #########
 ###############################################
-# Logistic Regression
-m_logreg = glm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
-                num_click_syllabus + num_click_progress + num_seek_video + num_name_prob_submit +
-                num_slack_tab, data = train, family = 'binomial')
 
-m_logreg
+# Fit model to training data
+# Linear Regression
+#took out num_seek_video
+# m_linreg = lm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
+#                 num_click_syllabus + num_click_progress + num_name_prob_submit +
+#                 num_slack_tab + num_week_two_reading + num_week_five_reading + num_week_seven_reading
+#               , data = train)
+# m_linreg
+# Logistic Regression
+#m_logreg = glm(quiz300 ~ .-num_quiz-studentID , data = train, family = "binomial")
+#took out num_seek_video, num_click sylabus, num_week two reading 
+# m_logreg = glm(is_submitted ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video 
+#                + num_click_progress  + num_name_prob_submit 
+#               , data = train, family = 'binomial')
+m_logreg = glm(is_submitted ~  num_name_prob_submit 
+              , data = train, family = 'binomial')
+summary(m_logreg)
+#naive Bayes 
+library(e1071)
+m_nb = naiveBayes(as.factor(is_submitted) ~ num_load_video + num_pause_video + num_speed_change_video + num_stop_video +
+                num_click_syllabus + num_click_progress + num_seek_video + num_name_prob_submit +
+                num_slack_tab + num_week_two_reading + num_week_five_reading + num_week_seven_reading, data = train, method = "class")
+# the output are a-prior and conditional probabilities
+print("this is the naive Bayes")
+m_nb
+p_nb = predict(m_nb, newdata = test, type = "class")
+test
+# Get predictions
+# Linear Regression
+
+# p_linreg = predict(m_linreg, newdata = test)
+# 
+# p_linreg
+
+# Logistic Regression
+
+p_logreg = predict(m_logreg, newdata = test, type = 'response')
+p_logreg = ifelse(p_logreg > .5, 1, 0)
+
+p_logreg
+
+
+# Compute accuracy, recall, precision, and F1
+# add code here
+# Accuracy: (TruePos + TrueNeg) / total
+# Recall: TruePos / (TruePos + FalseNeg)
+# Precision: TruePos / (TruePos + FalsePos)
+# F1 = 2 / (1/recall + 1/precision)
+
+cm_logreg = table(true = test$is_submitted, predicted = p_logreg)
+#cm_nb = table(true = test$is_submitted, predicted = p_nb)
+
+# convenience function for evaluation of confusion matrix
+cm_eval = function(cm) {
+    list(
+        # accuracy = sum(diag(cm)) / sum(cm),
+        # recall = cm[2,2] / sum(cm[2,]),
+        # precision = cm[2,2] / sum(cm[,2]),
+        F1 = 2 / (1/(cm[2,2] / sum(cm[2,])) + 1/(cm[2,2] / sum(cm[,2])))
+    )
+}
+
+cm_eval(cm_logreg)
+  
+# Training F1 score is ...
 
 ###############################################
 ###############################################
@@ -377,22 +512,16 @@ m_logreg
 ############################################### 
 ####### BEGIN INPUT: Test and report ##########
 ###############################################
+
 # Make predictions on the test dataset
-p_logreg = predict(m_logreg, newdata = test, type = 'response')
-p_logreg = ifelse(p_logreg > .5, 1, 0)
-p_logreg
-cm_logreg = table(true = test$is_submitted, predicted = p_logreg)
-cm_logreg
+# add code here
 
 # Compute F1
-cm_eval = function(cm) {
-    list(
-        F1 =  2 / (1/(cm[2,2] / sum(cm[2,])) + 1/(cm[2,2] / sum(cm[,2])))
-    )
-}
+# add code here
+F1 = 2 / (1/recall + 1/precision)
 
-cm_eval(cm_logreg)
-
+# Testing F1 score is ...
+F1
 
 ###############################################
 ###############################################
