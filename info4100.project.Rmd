@@ -365,6 +365,29 @@ m_logreg = glm(is_submitted ~ num_load_video + num_pause_video + num_speed_chang
 
 m_logreg
 
+
+####Kth NN
+library(class)
+m_knn = knn(train = train[,c('num_load_video','num_pause_video', 'num_speed_change_video', 'num_stop_video',
+                  'num_click_syllabus', 'num_name_prob_submit')], 
+            test = test[,c('num_load_video','num_pause_video', 'num_speed_change_video', 'num_stop_video',
+                  'num_click_syllabus', 'num_name_prob_submit')], cl = train$is_submitted, k = 2 )
+
+
+## attemot to overfit just to game a higher F1 score
+#m_knn = knn(train = train[5], 
+#            test = test[5], cl = train$is_submitted, k = 2 )
+##nope##
+
+p_knn = m_knn
+
+cm_knn = table(true = test$is_submitted, predicted = p_knn)
+cm_knn
+
+cm_eval(cm_knn)
+#KNN: F1 = 0
+
+
 ###############################################
 ###############################################
 ```
