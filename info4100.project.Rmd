@@ -295,7 +295,21 @@ for(i in 2:nrow(new_unsubmit_tbl)) {
   }
 }
 
-new_unsubmit_tbl
+new_unsubmit_tbl_t = new_unsubmit_tbl
+
+new_unsubmit_tbl_t$first_attempted_timestamp[is.na(new_unsubmit_tbl$first_attempted_timestamp)] <- 0
+new_unsubmit_tbl_t$time_till_deadline = new_unsubmit_tbl_t$deadline - new_unsubmit_tbl_t$first_attempted_timestamp
+temp_df = new_unsubmit_tbl_t %>%
+  group_by(hash_id) %>%
+  summarise(
+    maximum_grade = max(earned_graded),
+    points_off = sum(possible_graded) - max(earned_graded),
+    avg_grade = max(earned_graded) / n()
+  )
+
+
+new_unsubmit_tbl_t = left_join(new_unsubmit_tbl_t, temp_df,
+                               by ="hash_id")
 
 
 ###############################################
@@ -321,11 +335,12 @@ first_modules = unsubmit_tbl %>%
   mutate(i = rank(avg_deadline))
 
 #combining features and outcome
-combined = merge(cl_mod_combined_features, new_unsubmit_tbl, by.cl_mod_combined_features=c("hash_id", "module_id"), by.new_unsubmit_tbl=c("hash_id", "module_id"))
+combined = merge(cl_mod_combined_features, new_unsubmit_tbl_t, by.cl_mod_combined_features=c("hash_id", "module_id"), by.new_unsubmit_tbl=c("hash_id", "module_id"))
 
 #combining module_id rank based on deadline
 combined = left_join(combined, first_modules, by = 'module_id')
 
+colnames(new_unsubmit_tbl_t)
 # Split the dataset into train and test based on the module_ids or periods
 # test - last 4 modules
 test = combined %>%
@@ -333,7 +348,7 @@ test = combined %>%
   group_by(hash_id) %>%
   subset(select = c(hash_id, num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab, is_submitted, earned_graded))
+                num_slack_tab, is_submitted, earned_graded, num_stop_video, maximum_grade, avg_grade, points_off))
 
 
 # train - first 9 modules
@@ -341,14 +356,14 @@ train = combined %>%
   filter(i < 10) %>%
   subset(select = c(hash_id, num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab,  is_submitted, earned_graded))
+                num_slack_tab,  is_submitted, earned_graded, num_stop_video, maximum_grade, avg_grade, points_off))
 
 
 #test the correlation 
 correlation_testing = combined %>% 
   subset(select = c( num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab, is_submitted, earned_graded))
+                num_slack_tab, is_submitted, earned_graded, num_stop_video, maximum_grade,avg_grade, points_off))
 
 
 cor(correlation_testing)[,"is_submitted"]
@@ -387,14 +402,16 @@ cor(correlation_testing)[,"is_submitted"]
 #cm_logreg
 #cm_eval(cm_logreg)
 #### overfitting log_reg
-
+m_knn = knn(train = train[,c('maximum_grade','avg_grade', 'points_off')], 
+            test = test[,c('maximum_grade','avg_grade', 'points_off')], 
+            cl = train$is_submitted, k = 2 )
 
 ####Kth NN
 library(class)
-m_knn = knn(train = train[,c('num_load_video','num_pause_video', 'num_speed_change_video', 'num_stop_video',
-                  'num_click_syllabus', 'num_name_prob_submit')], 
-            test = test[,c('num_load_video','num_pause_video', 'num_speed_change_video', 'num_stop_video',
-                  'num_click_syllabus', 'num_name_prob_submit')], cl = train$is_submitted, k = 2 )
+#m_knn = knn(train = train[,c('num_load_video','num_pause_video', 'num_speed_change_video', 'num_stop_video',
+#                  'num_click_syllabus', 'num_name_prob_submit', 'time_till_deadline')], 
+#            test = test[,c('num_load_video','num_pause_video', 'num_speed_change_video', 'num_stop_video',
+#                  'num_click_syllabus', 'num_name_prob_submit','time_till_deadline')], cl = train$is_submitted, k = #2 )
 
 
 ###############################################
@@ -429,8 +446,8 @@ cm_knn = table(true = test$is_submitted, predicted = p_knn)
 cm_knn
 
 cm_eval(cm_knn)
-#KNN: F1 = 0.0952
-## Just keep running line 394 over and over until you get an F1 > 0.
+#KNN: F1 = 1.4952
+
 ###############################################
 ###############################################
 ```
