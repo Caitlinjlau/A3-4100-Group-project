@@ -304,7 +304,16 @@ temp_df = new_unsubmit_tbl_t %>%
   summarise(
     maximum_grade = max(earned_graded),
     points_off = sum(possible_graded) - max(earned_graded),
-    avg_grade = max(earned_graded) / n()
+    avg_grade = max(earned_graded) / n(),
+    avg_grade_sq = (max(earned_graded) / n())^2,
+    earliest_time_till_deadline= max(time_till_deadline),
+    latest_time_till_deadline = min(time_till_deadline),
+    mean_time_till_deadline = mean(time_till_deadline),
+    mean_time_sq = mean(time_till_deadline)^2,
+    var_time_till_deadline = var(time_till_deadline),
+    std_time_till_deadline = sd(time_till_deadline),
+    num_past_time_till_deadline = sum(time_till_deadline<0),
+    modified_minus_created = modified_timestamp -created_timestamp
   )
 
 
@@ -348,7 +357,7 @@ test = combined %>%
   group_by(hash_id) %>%
   subset(select = c(hash_id, num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab, is_submitted, earned_graded, num_stop_video, maximum_grade, avg_grade, points_off))
+                num_slack_tab, is_submitted, earned_graded, num_stop_video, maximum_grade, avg_grade, points_off, earliest_time_till_deadline, latest_time_till_deadline, mean_time_till_deadline, var_time_till_deadline, std_time_till_deadline, num_past_time_till_deadline, mean_time_sq, avg_grade_sq))
 
 
 # train - first 9 modules
@@ -356,14 +365,14 @@ train = combined %>%
   filter(i < 10) %>%
   subset(select = c(hash_id, num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab,  is_submitted, earned_graded, num_stop_video, maximum_grade, avg_grade, points_off))
+                num_slack_tab,  is_submitted, earned_graded, num_stop_video, maximum_grade, avg_grade, points_off, earliest_time_till_deadline, latest_time_till_deadline, mean_time_till_deadline, var_time_till_deadline, std_time_till_deadline, num_past_time_till_deadline, mean_time_sq, avg_grade_sq ))
 
 
 #test the correlation 
 correlation_testing = combined %>% 
   subset(select = c( num_load_video, num_pause_video, num_speed_change_video, num_stop_video,
                 num_click_syllabus, num_click_progress, num_seek_video, num_name_prob_submit,
-                num_slack_tab, is_submitted, earned_graded, num_stop_video, maximum_grade,avg_grade, points_off))
+                num_slack_tab, is_submitted, earned_graded, num_stop_video, maximum_grade,avg_grade, points_off, earliest_time_till_deadline, latest_time_till_deadline, mean_time_till_deadline, var_time_till_deadline, std_time_till_deadline, num_past_time_till_deadline, mean_time_sq, avg_grade_sq ))
 
 
 cor(correlation_testing)[,"is_submitted"]
@@ -376,7 +385,6 @@ cor(correlation_testing)[,"is_submitted"]
 # plot(combined$num_seek_video, combined$is_submitted)
 # plot(combined$num_name_prob_submit, combined$is_submitted)
 # plot(combined$num_slack_tab, combined$is_submitted)
-
 ###############################################
 ###############################################
 ```
@@ -402,12 +410,18 @@ cor(correlation_testing)[,"is_submitted"]
 #cm_logreg
 #cm_eval(cm_logreg)
 #### overfitting log_reg
-m_knn = knn(train = train[,c('maximum_grade','avg_grade', 'points_off')], 
-            test = test[,c('maximum_grade','avg_grade', 'points_off')], 
-            cl = train$is_submitted, k = 2 )
 
-####Kth NN
+
 library(class)
+m_logreg = glm(is_submitted ~ mean_time_till_deadline + maximum_grade + points_off + avg_grade + earliest_time_till_deadline + latest_time_till_deadline + mean_time_sq + avg_grade_sq, data = train, family = "binomial")
+m_logreg
+m_knn = knn(train = train[,c(  'mean_time_till_deadline', 'var_time_till_deadline', 'std_time_till_deadline', 'maximum_grade','avg_grade', 'points_off')],
+            test = test[,c(  'mean_time_till_deadline', 'var_time_till_deadline', 'std_time_till_deadline', 'maximum_grade','avg_grade', 'points_off')],
+            cl = train$is_submitted, k = 2 )
+# m_knn = knn(train = train[,c(  'mean_time_till_deadline')], 
+#             test = test[,c(  'mean_time_till_deadline')], 
+#             cl = train$is_submitted, k = 2 )
+####Kth NN
 #m_knn = knn(train = train[,c('num_load_video','num_pause_video', 'num_speed_change_video', 'num_stop_video',
 #                  'num_click_syllabus', 'num_name_prob_submit', 'time_till_deadline')], 
 #            test = test[,c('num_load_video','num_pause_video', 'num_speed_change_video', 'num_stop_video',
@@ -436,17 +450,25 @@ library(class)
 # Compute F1
 cm_eval = function(cm) {
     list(
-        F1 =  2 / (1/(cm[2,2] / sum(cm[2,])) + 1/(cm[2,2] / sum(cm[,2])))
+        recall = cm[2,2] / sum(cm[2,]),
+          F1 =  2 / (1/(cm[2,2] / sum(cm[2,])) + 1/(cm[2,2] / sum(cm[,2])))
+        
     )
 }
 
+p_logreg = predict(m_logreg, newdata= test, type ="response") > 0.5
+#p_logreg
+cm_log = table(test$is_submitted, predicted = p_logreg)
+print("the logistic regression model F1 score:")
+cm_eval(cm_log)
+# log reg: F1= 0.2722513
 p_knn = m_knn
 
 cm_knn = table(true = test$is_submitted, predicted = p_knn)
 cm_knn
-
+print("the knn modelF1 score")
 cm_eval(cm_knn)
-#KNN: F1 = 1.4952
+#KNN: F1 = 0.2666667
 
 ###############################################
 ###############################################
