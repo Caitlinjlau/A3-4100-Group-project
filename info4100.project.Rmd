@@ -1,10 +1,10 @@
 ---
 title: 'Group Project: Early Alert with LMS Data'
-author: '[Caitlin Lau, CJL236]]'
+author: '[Caitlin Lau (CJL236), Destiny Malloy (DAM359), Jeremy Clerc (JC2267), Esuvat Bomani (EKB72), Asma Khan (AK2355), Trevor Warner (TW448) ]]'
 subtitle: INFO 4100 Learning Analytics
 output:
-  pdf_document: default
   word_document: default
+  pdf_document: default
   html_document:
     df_print: paged
 ---
@@ -46,27 +46,34 @@ To look up what pages URLs refer to (works for browser events, not server events
 # add code here
 head(cl)
 # print("distinct hash id")
-# n_distinct(cl$hash_id)
+n_distinct(cl$hash_id)
 # n_distinct(cl$survey_id)
 # n_distinct(cl$time)
 # print("distinct name")
 # n_distinct(cl$name)
-# summary(cl)
-# table(cl$event_source)
-
-# Exploring Assessment grades
+ summary(cl$timestamp)
+ table(cl$event_source)
+ #boxplot(cl$timestamp ~ cl$module_id)
+ plot(cl$timestamp)
+ 
+ # Exploring Assessment grades
 # add code here
 head(a)
 # print("distinct hash_id")
-# n_distinct(a$hash_id)
+n_distinct(a$hash_id)
 # print("distinct created timestamp")
-# n_distinct(a$created_timestamp)
-# summary(a)
-# table(a$created_timestamp)
-
+n_distinct(a$created_timestamp)
+summary(a)
+table(a$earned_graded)
+hist(a$first_attempted_timestamp)
+boxplot(a$earned_graded~ a$possible_graded)
 # Exploring Module States
 # add code here
 head(m)
+summary(m)
+table(m$module_type)
+n_distinct(m$module_type)
+plot(m$grade)
 ###############################################
 ###############################################
 ```
@@ -78,7 +85,7 @@ ma = m %>% left_join(
     a %>% select(hash_id:possible_graded, first_attempted_timestamp), 
     by = c("hash_id"="hash_id", "module_id"="usage_key")
 )
-ma
+head(ma)
 
 # Only sequential modules have a grade associated with them
 table(ma$module_type, ma$first_attempted_timestamp>0)
@@ -127,7 +134,7 @@ unsubmit_tbl <- ma %>%
     ) %>% 
     arrange(deadline)
 
-unsubmit_tbl
+#head(unsubmit_tbl)
 
 #the assessment table has a lot of empty records in there even if no questions associated 
 #p unsubmit looks up if most people have not submitted anything for it it is not a real assignment. And why it needs to be kicked out
@@ -146,13 +153,13 @@ Now you know which assessments (module_ids) to target. **Be sure to kick out the
 #should this be > 0.5
 unsubmit_tbl = subset(unsubmit_tbl, p_unsubmitted <= 0.5)
 unsubmit_tbl$deadline_minus_24 = (unsubmit_tbl$deadline-(60 * 60 * 24))
-unsubmit_tbl
+#head(unsubmit_tbl)
 
 new_unsubmit_tbl=merge(x = unsubmit_tbl, y = ma, by = "module_id", all.x = TRUE)
 
 #new column: if earned_grade=0 and first attempted timestamp in ma is NA then it is unsubmitted.
 new_unsubmit_tbl$is_submitted=(ifelse(is.na(new_unsubmit_tbl$first_attempted_timestamp), 1, 0 ))
-new_unsubmit_tbl
+head(new_unsubmit_tbl)
 
 ############################################### 
 ############################################### 
@@ -179,7 +186,7 @@ example_features = cl %>%
         num_seq_goto = sum(event_type=="seq_goto")
     )
 
-head(example_features)
+#head(example_features)
 ```
 
 *Question 3:* Engineer features for each student and assessment, subject to the timing constraint.
@@ -189,7 +196,7 @@ cl = cl[!is.na(cl$hash_id), ]
 
 mod_and_deadline = unsubmit_tbl[,c("module_id", "deadline_minus_24")] 
 mod_and_deadline = mod_and_deadline[order(mod_and_deadline$deadline_minus_24, decreasing = FALSE),]
-mod_and_deadline
+#head(mod_and_deadline)
 #FIX make it so that it is not hard coded
 #Add minimum module that clickstream information can be used in
 cl$module_id <- ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[1], mod_and_deadline$module_id[1],
@@ -209,11 +216,11 @@ cl$module_id <- ifelse(cl$timestamp <=mod_and_deadline$deadline_minus_24[1], mod
 #cl_mod_combined = left_join(cl, unsubmit_tbl, by = "module_id")
 cl_mod_combined = merge(x = cl, y = unsubmit_tbl, by = "module_id", all.x = TRUE)
 cl_mod_combined = cl_mod_combined[!is.na(cl_mod_combined$module_id), ]
-cl
-cl_mod_combined
-tail(cl)
+#cl
+#head(cl_mod_combined)
+#tail(cl)
 #unsubmit_tbl
-tail(cl_mod_combined)
+#tail(cl_mod_combined)
 
 
 ```
@@ -260,10 +267,10 @@ cl_mod_combined_features = cl_mod_combined %>%
       num_week_seven_reading= sum(name=="/courses/course-v1:Cornellx+INFO4100+Fall2020/courseware/7692a90992fe43acbe8caea218a2a595/bb26fa8b1f7648768c9ba9076f54e786/")
  )
 
-cl_mod_combined_features
+#cl_mod_combined_features
 cl_mod_combined_features = cl_mod_combined_features[order(cl_mod_combined_features$deadline_minus_24, decreasing = FALSE),]
 cl_mod_combined_features = cl_mod_combined_features[order(cl_mod_combined_features$hash_id, decreasing = FALSE),]
-cl_mod_combined_features
+#head(cl_mod_combined_features)
 
 #Aggregate data so that you have only use ceratain data for certain modules (time)
 for(i in 2:nrow(cl_mod_combined_features)) {
@@ -415,9 +422,17 @@ cor(correlation_testing)[,"is_submitted"]
 library(class)
 m_logreg = glm(is_submitted ~ mean_time_till_deadline + maximum_grade + points_off + avg_grade + earliest_time_till_deadline + latest_time_till_deadline + mean_time_sq + avg_grade_sq, data = train, family = "binomial")
 m_logreg
+
+# library(rpart)
+# # m_class_tree = rpart(is_submitted ~  maximum_grade, data = train, method = "class")
+# # m_class_tree
+# # m_reg_tree = rpart(is_submitted ~ mean_time_till_deadline, data = train, method = "anova")
+
 m_knn = knn(train = train[,c(  'mean_time_till_deadline', 'var_time_till_deadline', 'std_time_till_deadline', 'maximum_grade','avg_grade', 'points_off')],
             test = test[,c(  'mean_time_till_deadline', 'var_time_till_deadline', 'std_time_till_deadline', 'maximum_grade','avg_grade', 'points_off')],
             cl = train$is_submitted, k = 2 )
+
+
 # m_knn = knn(train = train[,c(  'mean_time_till_deadline')], 
 #             test = test[,c(  'mean_time_till_deadline')], 
 #             cl = train$is_submitted, k = 2 )
@@ -450,7 +465,7 @@ m_knn = knn(train = train[,c(  'mean_time_till_deadline', 'var_time_till_deadlin
 # Compute F1
 cm_eval = function(cm) {
     list(
-        recall = cm[2,2] / sum(cm[2,]),
+       # recall = cm[2,2] / sum(cm[2,]),
           F1 =  2 / (1/(cm[2,2] / sum(cm[2,])) + 1/(cm[2,2] / sum(cm[,2])))
         
     )
@@ -462,6 +477,12 @@ cm_log = table(test$is_submitted, predicted = p_logreg)
 print("the logistic regression model F1 score:")
 cm_eval(cm_log)
 # log reg: F1= 0.2722513
+
+# p_class_tree = predict(m_class_tree, newdata = test, type = "class")
+# cm_class_tree = table(true = test$is_submitted, predicted = p_class_tree)
+# print("The class tree model F1: score")
+# cm_eval(cm_class_tree)
+
 p_knn = m_knn
 
 cm_knn = table(true = test$is_submitted, predicted = p_knn)
@@ -480,11 +501,11 @@ cm_eval(cm_knn)
 
 %######## BEGIN INPUT: Summarize findings ############
 
-The model that we used for this early warning system is a logistic regression model. Logistic regression is used to predict binary variable outcome, in this case we designed an early warning system to predict whether a student will submit an assignment 24 hours before the deadline. We used multiple features to predict whether or not a student will or will not submit an assignment. Over the course of this project, our team created 24 features but after filtering them down to see which features have the highest correlation in predicting the submission of an assignment. Some of these features like clicking on the week 5 reading or stopping the video had very low rates of predicting the submission of an assignment and therefore we filtered these out from our logistic model.
+The model that we used for this early warning system is a logistic regression model. Logistic regression is used to predict binary variable outcome, in this case we designed an early warning system to predict whether a student will submit an assignment 24 hours before the deadline. We used multiple features to predict whether or not a student will or will not submit an assignment. Over the course of this project, our team created 24 features but after filtering them down to see which features have the highest correlation in predicting the submission of an assignment we used the best 8 features with the highest correlation (0.38-0.4 in correlation). Some of these features like clicking on the week 5 reading or stopping the video had very low rates of predicting the submission  of an assignment (0.05 corr) and therefore we filtered these out from our logistic model.
 
 Instead, in our logistic model, we used variables that had a moderate to higher accuracy at predicting the submission. These features that we implemented into the system that are important are: the average time left until the deadline when they first submitted, the maximum grade they received in the course, the  mean grade squared, how many points they got taken off their assignments, their average grade in the course, mean time they took squared (mean square) , the earliest time they submitted before the deadline, the latest time they submitted before the deadline. 
 
-Currently, this early warning system is not predicting the students who will dropout with sufficient precision and recall for its F1 score to be F1>0/7. Initially, our F1 score was only 0.09, but over the course of creating new features with higher correlations, we were able to increase our F1 score significantly to become 0.2722513. The click data in the model did a very poor job at predicting wether or not an assignment was submitted or not, this lead to an intially low F1 score, however in our final model, we mostly omitted click data in order to improve the recall and precision of our model. Our final model mainly uses features that focus on data gained from the assignments and submission times such as the earliest time they submitted before the dealing, how many points were taken off their assignments, and the mean grade they recieved in the course. We would not recommend implementing the system currently until we are able to gain more click data that can be utilized to generate more accuarte features that we can base our model on since the 13 click features we discarded did a very poor job at prediciting submissions of the students. However an important thing to note is that information about assignment submission, time taken, and grades received do a good job at predicting the submisisons of the students and should definitely be used in a model used for an early warning system. 
+Currently, this early warning system is not predicting the students who will dropout with sufficient precision and recall for its F1 score to be F1>0.7. Initially, our F1 score was only 0.09, but over the course of creating new features with higher correlations, we were able to increase our F1 score significantly to become 0.2722513. The click data in the model did a very poor job at predicting whether or not an assignment was submitted, this lead to an initially low F1 score, however in our final model, we mostly omitted click data in order to improve the recall and precision of our model. Our final model mainly uses features that focus on data gained from the assignments and submission times such as the earliest time they submitted before the deadline, how many points were taken off their assignments, and the mean grade they received in the course. We would not recommend implementing the system currently until we are able to gain more click data that can be utilized to generate more accurate features that we can base our model on since the 13 click features we discarded did a very poor job at predicting submissions of the students. However an important thing to note is that information about assignment submission, time taken, and grades received do a good job at predicting the submissions of the students and should definitely be used in a model used for an early warning system. If we could gather more data to increase the model's accuracy, we would want to include features representing the amount of student engagement in the slack channels (posting in the office hours chat) and the level of participation in office hours. Our features mainly summarize the results of student's previous assignments as opposed to measuring how engaged a student has been with their readings, lectures, instructors, and videos. However, we feel it would be interesting to understand more about how a student is interacting with the course materials both on and off screen since the clickstream data gives very minimal insight into a student's overall attitude towards the course.
 %###############################################
 
 # Submit Project
